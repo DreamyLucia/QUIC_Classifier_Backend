@@ -52,6 +52,7 @@ def get_current_user(payload: dict = Depends(verify_token)) -> User:
         HTTPException: 用户不存在
     """
     username = payload.get("username")
+    role = payload.get("role", "user")
     if not username:
         raise HTTPException(status_code=401, detail="Token 中缺少用户名")
 
@@ -60,6 +61,8 @@ def get_current_user(payload: dict = Depends(verify_token)) -> User:
         user = get_user_by_username(db, username)
         if not user:
             raise HTTPException(status_code=401, detail="用户不存在")
+        if user.role != role:
+            raise HTTPException(status_code=401, detail="角色信息不匹配")
         return user
     finally:
         db.close()

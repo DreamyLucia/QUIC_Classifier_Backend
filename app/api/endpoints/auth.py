@@ -3,12 +3,12 @@ from fastapi import APIRouter
 from app.utils.response import APIResponse
 from app.core.security import RSAUtil
 from app.services import auth_service
-from app.schemas.auth import RegisterRequest, LoginRequest, ResetRequest
+from app.schemas.auth import RegisterRequest, LoginRequest, ResetRequest, AuthResponse, PublicKeyResponse
 
 router = APIRouter(prefix="/users", tags=["认证"])
 
 
-@router.get("/public-key")
+@router.get("/public-key", response_model=PublicKeyResponse)
 def get_public_key():
     """获取 RSA 公钥"""
     try:
@@ -18,7 +18,7 @@ def get_public_key():
         return APIResponse.error(msg=str(e), code=500)
 
 
-@router.post("/register")
+@router.post("/register", response_model=AuthResponse)
 def register(req: RegisterRequest):
     """用户注册"""
     # 解密密码
@@ -28,15 +28,20 @@ def register(req: RegisterRequest):
         return APIResponse.error(msg="密码解密失败", code=400)
 
     # 注册用户
-    success, msg, token = auth_service.register(req.username, password)
+    success, msg, token, user_id, username, role = auth_service.register(req.username, password)
 
     if not success:
         return APIResponse.error(msg=msg, code=400)
 
-    return APIResponse.success(data={"token": token}, msg=msg)
+    return APIResponse.success(data={
+        "token": token,
+        "userId": user_id,
+        "username": username,
+        "role": role
+    }, msg=msg)
 
 
-@router.post("/login")
+@router.post("/login", response_model=AuthResponse)
 def login(req: LoginRequest):
     """用户登录"""
     # 解密密码
@@ -46,12 +51,17 @@ def login(req: LoginRequest):
         return APIResponse.error(msg="密码解密失败", code=400)
 
     # 登录验证
-    success, msg, token = auth_service.login(req.username, password)
+    success, msg, token, user_id, username, role = auth_service.login(req.username, password)
 
     if not success:
         return APIResponse.error(msg=msg, code=401)
 
-    return APIResponse.success(data={"token": token}, msg=msg)
+    return APIResponse.success(data={
+        "token": token,
+        "userId": user_id,
+        "username": username,
+        "role": role
+    }, msg=msg)
 
 
 @router.post("/reset")

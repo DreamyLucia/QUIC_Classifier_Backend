@@ -20,9 +20,12 @@ class ResetRequest(BaseModel):
     password: str  # 新密码（RSA 加密后）
 
 
-class TokenResponse(BaseModel):
-    """Token 响应"""
+class AuthResponse(BaseModel):
+    """登录/注册响应"""
     token: str
+    userId: str
+    username: str
+    role: str
 
 
 class PublicKeyResponse(BaseModel):
