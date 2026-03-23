@@ -12,7 +12,9 @@ class Settings:
     UPLOAD_DIR = BASE_DIR / "uploads"
 
     # JWT 配置
-    JWT_SECRET = os.getenv("JWT_SECRET", "fallback-secret-key-change-this")
+    JWT_SECRET = os.getenv("JWT_SECRET")
+    if not JWT_SECRET:
+        raise ValueError("❌ JWT_SECRET 未设置！请在 .env 文件中配置")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 
