@@ -8,6 +8,7 @@ from app.models.task import Task
 from app.models.analysis_result import AnalysisResult
 from app.ml.feature_extractor import FeatureExtractor
 from app.ml.model_engine import ModelEngine
+import shutil
 
 # 类别列表
 CLASS_NAMES = ['Nkiri', 'bilibili', 'edge', 'kwai',
@@ -115,6 +116,15 @@ class AnalysisService:
 
         print(f"任务 {task_id} 分析完成: 总计 {len(pcap_files)} 个文件")
         print(f"统计: {category_stats}")
+
+        # 分析完成后，自动删除原始 pcap 文件（释放空间）
+        task_dir = settings.UPLOAD_DIR / task_id
+        if task_dir.exists():
+            try:
+                shutil.rmtree(task_dir)
+                print(f"✅ 已删除任务 {task_id} 的原始文件，释放空间")
+            except Exception as e:
+                print(f"❌ 删除任务文件失败: {e}")
 
         return {
             "task_id": task_id,
