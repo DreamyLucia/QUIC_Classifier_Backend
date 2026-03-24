@@ -39,8 +39,9 @@ def get_db():
 
 def init_db():
     """初始化数据库（创建所有表）"""
-    from app.models.user import User  # 导入所有模型，确保它们被注册
-    from app.models.upload_record import UploadRecord
+    from app.models.user import User
+    from app.models.task import Task
+    from app.models.analysis_result import AnalysisResult
 
     Base.metadata.create_all(bind=engine)
     print("✅ 数据库表创建成功")

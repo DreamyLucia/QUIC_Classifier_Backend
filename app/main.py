@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, user, upload
+from app.api.endpoints import auth, user, upload, results
 from app.core.config import settings
 from app.core.database import init_db
 
@@ -23,6 +23,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
+app.include_router(results.router, prefix="/api")
 
 
 @app.get("/")

@@ -8,8 +8,12 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.models.upload_record import UploadRecord
+from app.models.task import Task
 from app.core.config import settings
+from app.services.analysis_service import AnalysisService
+import asyncio
+from app.schemas.upload import BatchUploadResponse, FailedFile
+from app.utils.response import APIResponse
 
 router = APIRouter(prefix="/upload", tags=["上传"])
 
@@ -22,6 +26,10 @@ PCAP_MAGIC_NUMBERS = [
     b'\x4d\x3c\xb2\xa1',
     b'\xa1\xb2\x3c\x4d',
 ]
+
+# 类别列表
+CLASS_NAMES = ['Nkiri', 'bilibili', 'edge', 'kwai',
+               'tencentnews', 'tencentvideo', 'tiktok', 'xiaohongshu']
 
 
 def is_valid_pcap(file_path: str) -> bool:
@@ -78,7 +86,7 @@ async def save_file_safe(task_dir: Path, file: UploadFile) -> tuple:
         if not is_valid_pcap(tmp_path):
             return (file.filename, None, 0, False, "无效的 pcap 文件")
 
-        # 生成最终文件名
+        # 生成最终文件名（处理重名）
         original_name = file.filename
         base_name = os.path.splitext(original_name)[0]
         ext = os.path.splitext(original_name)[1]
@@ -100,91 +108,86 @@ async def save_file_safe(task_dir: Path, file: UploadFile) -> tuple:
         return (file.filename, None, 0, False, str(e))
 
 
-@router.post("/batch")
+@router.post("/batch", response_model=BatchUploadResponse)
 async def upload_batch_pcap(
-        files: list[UploadFile] = File(..., description="批量上传的 pcap 文件"),
-        task_id: str = Query(..., description="任务ID，由前端生成"),
+        files: list[UploadFile] = File(...),
+        task_id: str = Query(..., description="任务ID"),
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
-    """
-    批量上传 pcap 文件
-
-    - 一次上传多个文件
-    - 返回任务摘要信息
-    """
-
-    # 验证 task_id
-    if not task_id or len(task_id.strip()) == 0:
+    # 验证参数
+    if not task_id:
         raise HTTPException(status_code=400, detail="task_id 不能为空")
 
-    if not files or len(files) == 0:
+    if not files:
         raise HTTPException(status_code=400, detail="没有要上传的文件")
+
+    # 创建或获取任务记录
+    task = db.query(Task).filter(Task.task_id == task_id).first()
+    if not task:
+        task_name = generate_task_name()
+        task = Task(
+            task_id=task_id,
+            user_id=current_user.id,
+            task_name=task_name,
+            file_count=0,
+            category_stats={cat: 0 for cat in CLASS_NAMES},
+            unknown_count=0,
+            status="pending"
+        )
+        db.add(task)
+        db.commit()
+        db.refresh(task)
 
     # 创建任务目录
     task_dir = settings.UPLOAD_DIR / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
 
-    # 检查或创建任务记录
-    upload_record = db.query(UploadRecord).filter(UploadRecord.task_id == task_id).first()
-
-    if not upload_record:
-        task_name = generate_task_name()
-        upload_record = UploadRecord(
-            task_id=task_id,
-            user_id=current_user.id,
-            task_name=task_name,
-            file_count=0,
-            category_stats={
-                "bilibili": 0,
-                "tiktok": 0,
-                "tencentvideo": 0,
-                "kwai": 0,
-                "edge": 0,
-                "tencentnews": 0,
-                "xiaohongshu": 0,
-                "Nkiri": 0
-            },
-            unknown_count=0,
-            status="pending"
-        )
-        db.add(upload_record)
-        db.commit()
-        db.refresh(upload_record)
-    else:
-        task_name = upload_record.task_name
-
-    # 逐个保存文件
+    # 逐个保存文件，只记录成功的
     success_count = 0
     fail_count = 0
     failed_files = []
 
     for file in files:
+        # 调用 save_file_safe 保存文件
         original_name, saved_name, size, success, error_msg = await save_file_safe(task_dir, file)
 
         if success:
             success_count += 1
         else:
             fail_count += 1
-            failed_files.append({
-                "filename": original_name,
-                "error": error_msg
-            })
+            failed_files.append({"filename": original_name, "error": error_msg})
 
-    # 更新记录
-    upload_record.file_count = success_count + fail_count
+    # 更新任务记录（只记录成功的文件数）
+    task.file_count = success_count
+
+    # 构建失败文件列表
+    failed_files_list = [
+        {"filename": f["filename"], "error": f["error"]}
+        for f in failed_files
+    ] if failed_files else None
+
+    if success_count == 0:
+        task.status = "failed"
+    else:
+        task.status = "pending"  # 等待分析
+
     db.commit()
 
+    # 如果有成功的文件，触发分析
+    if success_count > 0:
+        analysis_service = AnalysisService()
+        asyncio.create_task(analysis_service.analyze_task(task_id, db))
+
     # 返回结果
-    return {
-        "code": 200,
-        "msg": "上传完成",
-        "data": {
+    return APIResponse.success(
+        data={
             "task_id": task_id,
-            "task_name": task_name,
+            "task_name": task.task_name,
             "total": len(files),
             "success": success_count,
             "failed": fail_count,
-            "failed_files": failed_files if failed_files else None
-        }
-    }
+            "failed_files": failed_files_list
+        },
+        msg="上传完成，等待分析"
+    )
