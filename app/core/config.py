@@ -46,5 +46,9 @@ class Settings:
     # 调试模式
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
+    def __init__(self):
+        # 确保上传目录存在
+        self.UPLOAD_DIR.mkdir(exist_ok=True)
+
 
 settings = Settings()
