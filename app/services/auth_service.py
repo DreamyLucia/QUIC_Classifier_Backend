@@ -86,11 +86,10 @@ def login(username: str, password: str):
         # 查找用户
         user = get_user_by_username(db, username)
         if not user:
-            return False, "用户名或密码错误", None
+            return False, "用户名或密码错误", None, None, None, None
 
-        # 验证密码
         if not verify_password(password, user.password):
-            return False, "用户名或密码错误", None
+            return False, "用户名或密码错误", None, None, None, None
 
         # 生成 token
         token = generate_token(username, user.role)
