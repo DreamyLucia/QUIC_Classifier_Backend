@@ -4,6 +4,7 @@ from sqlalchemy import func, desc
 from datetime import datetime, timedelta
 from typing import Optional
 from app.api.dependencies import get_current_user
+from app.utils.response import APIResponse
 from app.core.database import get_db
 from app.models.user import User
 from app.models.task import Task
@@ -55,13 +56,13 @@ async def get_user_all_stats(
     total_count = len(results)
     avg_confidence = total_confidence / total_count if total_count > 0 else 0
 
-    return UserAllStatsResponse(
-        total=total_count,
-        category_stats=category_stats,
-        unknown_count=unknown_count,
-        total_analysis_time=round(total_analysis_time, 2),
-        avg_confidence=round(avg_confidence, 4)
-    )
+    return APIResponse.success(data={
+        "total": total_count,
+        "category_stats": category_stats,
+        "unknown_count": unknown_count,
+        "total_analysis_time": round(total_analysis_time, 2),
+        "avg_confidence": round(avg_confidence, 4)
+    }, msg="success")
 
 
 @router.get("/user/daily", response_model=UserDailyStatsResponse)
@@ -143,11 +144,11 @@ async def get_user_daily_stats(
             ))
         current_date += timedelta(days=1)
 
-    return UserDailyStatsResponse(
-        daily_stats=result_stats,
-        start_date=start_date.strftime("%Y-%m-%d"),
-        end_date=end_date.strftime("%Y-%m-%d")
-    )
+    return APIResponse.success(data={
+        "daily_stats": [d.model_dump() for d in result_stats],
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": end_date.strftime("%Y-%m-%d")
+    }, msg="success")
 
 
 @router.get("/tasks", response_model=UserTasksResponse)
@@ -195,6 +196,7 @@ async def get_user_tasks(
             task_name=t.task_name,
             file_count=t.file_count,
             status=t.status,
+            model_type=t.model_type,
             category_stats=t.category_stats,
             unknown_count=t.unknown_count,
             total_analysis_time=round(total_analysis_time, 2),
@@ -203,10 +205,10 @@ async def get_user_tasks(
             updated_at=t.updated_at.isoformat() if t.updated_at else None
         ))
 
-    return UserTasksResponse(
-        total=len(tasks),
-        tasks=task_infos
-    )
+    return APIResponse.success(data={
+        "total": len(tasks),
+        "tasks": [t.model_dump() for t in task_infos]
+    }, msg="success")
 
 
 @router.get("/task/{task_id}", response_model=TaskResultsResponse)
@@ -259,26 +261,28 @@ async def get_task_results(
 
     # 构建结果列表
     result_items = [
-        TaskResultItem(
-            filename=r.filename,
-            label=r.label,
-            confidence=r.confidence,
-            analysis_time=r.analysis_time,
-            created_at=r.created_at.isoformat() if r.created_at else None
-        )
+        {
+            "filename": r.filename,
+            "label": r.label,
+            "confidence": r.confidence,
+            "probabilities": r.probabilities,
+            "analysis_time": r.analysis_time,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        }
         for r in results
     ]
 
-    return TaskResultsResponse(
-        task_id=task.task_id,
-        task_name=task.task_name,
-        file_count=task.file_count,
-        status=task.status,
-        category_stats=category_stats,
-        unknown_count=unknown_count,
-        total_analysis_time=round(total_analysis_time, 2),
-        avg_confidence=round(avg_confidence, 4),
-        created_at=task.created_at.isoformat() if task.created_at else None,
-        updated_at=task.updated_at.isoformat() if task.updated_at else None,
-        results=result_items
-    )
+    return APIResponse.success(data={
+        "task_id": task.task_id,
+        "task_name": task.task_name,
+        "file_count": task.file_count,
+        "status": task.status,
+        "model_type": task.model_type,
+        "category_stats": category_stats,
+        "unknown_count": unknown_count,
+        "total_analysis_time": round(total_analysis_time, 2),
+        "avg_confidence": round(avg_confidence, 4),
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+        "results": result_items
+    }, msg="success")

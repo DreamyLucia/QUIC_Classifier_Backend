@@ -112,6 +112,7 @@ async def save_file_safe(task_dir: Path, file: UploadFile) -> tuple:
 async def upload_batch_pcap(
         files: list[UploadFile] = File(...),
         task_id: str = Query(..., description="任务ID"),
+        model_type: str = Query("standard", description="模型类型: standard/adfnet"),  # 新增
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
@@ -131,6 +132,7 @@ async def upload_batch_pcap(
             user_id=current_user.id,
             task_name=task_name,
             file_count=0,
+            model_type=model_type,
             category_stats={cat: 0 for cat in CLASS_NAMES},
             unknown_count=0,
             status="pending"
@@ -177,7 +179,9 @@ async def upload_batch_pcap(
     # 如果有成功的文件，触发分析
     if success_count > 0:
         analysis_service = AnalysisService()
-        asyncio.create_task(analysis_service.analyze_task(task_id, db))
+        asyncio.create_task(
+            analysis_service.analyze_task(task_id, db, model_type)
+        )
 
     # 返回结果
     return APIResponse.success(

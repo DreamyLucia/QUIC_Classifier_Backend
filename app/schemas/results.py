@@ -34,6 +34,7 @@ class TaskInfo(BaseModel):
     task_name: str
     file_count: int
     status: str  # pending/analyzing/completed/failed
+    model_type: str
     category_stats: Dict[str, int]
     unknown_count: int
     total_analysis_time: float
@@ -63,6 +64,7 @@ class TaskResultsResponse(BaseModel):
     task_name: str
     file_count: int
     status: str  # pending/analyzing/completed/failed
+    model_type: str
     category_stats: Dict[str, int]
     unknown_count: int
     total_analysis_time: float

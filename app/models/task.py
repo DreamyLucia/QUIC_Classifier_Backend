@@ -11,6 +11,7 @@ class Task(Base):
     user_id = Column(String(12), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, comment="用户ID")
     task_name = Column(String(255), nullable=False, comment="任务名称（创建时间字符串）")
     file_count = Column(Integer, default=0, comment="文件总数")
+    model_type = Column(String(20), default="standard", comment="模型类型: standard/adfnet")
     status = Column(String(20), default="pending", comment="状态: pending/analyzing/completed/failed")
 
     # 八种流量包统计（JSON 格式，存储各类型数量）

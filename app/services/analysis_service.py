@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.models.task import Task
 from app.models.analysis_result import AnalysisResult
 from app.ml.feature_extractor import FeatureExtractor
-from app.ml.model_engine import ModelEngine
+from app.ml.model_engine import ModelEngine, ADFNetModelEngine
 import shutil
 
 # 类别列表
@@ -26,17 +26,32 @@ class AnalysisService:
         print(f"nb_classifier 存在: {(weights_dir / 'nb_classifier.pkl').exists()}")
 
         self.feature_extractor = FeatureExtractor()
-        self.model_engine = ModelEngine(
+        # 初始化标准模型
+        self.standard_engine = ModelEngine(
             time_model_path=str(weights_dir / "TemporalCNN_best.pth"),
             byte_model_path=str(weights_dir / "PayloadCNN_best.pth"),
             nb_clf_path=str(weights_dir / "nb_classifier.pkl")
         )
+
+        # 初始化 ADF-Net 模型
+        self.adfnet_engine = ADFNetModelEngine(
+            model_path=str(weights_dir / "ADFNet_best.pth")
+        )
         print("分析服务初始化成功")
 
-    async def analyze_task(self, task_id: str, db: Session) -> Dict[str, Any]:
+    def _get_engine(self, model_type: str):
+        """根据模型类型返回对应的引擎"""
+        if model_type == "adfnet":
+            return self.adfnet_engine
+        return self.standard_engine
+
+    async def analyze_task(self, task_id: str, db: Session, model_type: str = "standard") -> Dict[str, Any]:
         """分析任务中的所有文件"""
 
-        if self.model_engine is None:
+        engine = self._get_engine(model_type)
+        print(f"使用模型: {model_type}")
+
+        if engine is None:
             return {"error": "模型服务未初始化"}
 
         # 获取任务
@@ -77,7 +92,7 @@ class AnalysisService:
                     raise ValueError("特征提取失败")
 
                 # 模型预测
-                result = self.model_engine.predict(features)
+                result = engine.predict(features)
 
                 analysis_time = time.time() - start_time
 
